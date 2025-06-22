@@ -1,50 +1,24 @@
-from PySide6.QtWidgets import QApplication, QLabel, QMainWindow
-from PySide6.QtCore import Qt
 import sys
+from typing import Callable
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QMainWindow,
+    QMenuBar,
+    QMenu,
+    QAction,
+)
+from PySide6.QtCore import Qt
 
-def add(a, b) -> float:
-    """
-    Return the sum of two numbers.
-    
-    Parameters:
-        a: First number to add.
-        b: Second number to add.
-    
-    Returns:
-        float: The sum of a and b.
-    """
-    return a + b
-
-def subtract(a, b) -> float:
-    """
-    Return the difference between two numbers.
-    
-    Parameters:
-        a (float): The number to subtract from.
-        b (float): The number to subtract.
-    
-    Returns:
-        float: The result of a minus b.
-    """
-    return a - b
-
-def divide(a, b) -> float:
-    """
-    Return the quotient of two numbers.
-    
-    Parameters:
-        a (float): Dividend.
-        b (float): Divisor.
-    
-    Returns:
-        float: The result of dividing a by b.
-    """
-    return a / b
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    """
+    Main application window with dynamic and static menu setup.
+    """
+
+    def __init__(self) -> None:
         """
-        Initialize the main window with a centered label displaying "Hi" and set the window title to "Simple PySide6 App".
+        Initialize the main window and UI.
         """
         super().__init__()
         self.setWindowTitle("Simple PySide6 App")
@@ -52,13 +26,60 @@ class MainWindow(QMainWindow):
         label = QLabel("Hi", alignment=Qt.AlignCenter)
         self.setCentralWidget(label)
 
+        self.menu_bar: QMenuBar = self.menuBar()
 
-if __name__ == "__main__":
-    print(add(10, 5))
-    print(divide(20, 4))
+        self.add_quit_menu()  # Static quit menu first
 
+        # Example: dynamic menu structure (optional for future use)
+        dynamic_menus = {
+            # Add more menus like this in future
+            # "Tools": {"Do Something": self.some_function}
+        }
+        self.create_menu(dynamic_menus)
+
+    def add_quit_menu(self) -> None:
+        """
+        Add the 'Window' menu with a 'Quit' action.
+        """
+        window_menu: QMenu = self.menu_bar.addMenu("Window")
+
+        quit_action: QAction = QAction("Quit", self)
+        quit_action.setShortcut("Ctrl+Q")
+        quit_action.triggered.connect(self.quit_app)
+
+        window_menu.addAction(quit_action)
+
+    def create_menu(self, menus: dict[str, dict[str, Callable[[], None]]]) -> None:
+        """
+        Dynamically create additional menus and actions.
+
+        Parameters:
+            menus (dict): A dictionary where keys are menu names and
+                          values are dictionaries of action name -> callback.
+        """
+        for menu_name, actions in menus.items():
+            menu: QMenu = self.menu_bar.addMenu(menu_name)
+            for action_name, callback in actions.items():
+                action: QAction = QAction(action_name, self)
+                action.triggered.connect(callback)
+                menu.addAction(action)
+
+    def quit_app(self) -> None:
+        """
+        Quit the application.
+        """
+        QApplication.quit()
+
+def main() -> None:
+    """
+    Run the application.
+    """
     app = QApplication(sys.argv)
     window = MainWindow()
     window.resize(300, 200)
     window.show()
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
