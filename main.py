@@ -68,8 +68,7 @@ class MainWindow(QMainWindow):
         """
         Quit the application.
         """
-        self.close()
-
+        QApplication.quit()
 
 def main() -> None:
     """
