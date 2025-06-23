@@ -151,24 +151,62 @@ class MainWindow(QMainWindow):
                 image_label.setText("Invalid URL format.")
                 return
 
+            # Basic security check for image URLs
+            if not any(
+                url.lower().endswith(ext)
+                for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+            ):
+                image_label.setText("URL must point to an image file (.jpg, .png, .gif, etc.)")
+                return
+
             try:
-                response = requests.get(url, stream=True, timeout=5) # Added timeout
+                # Security headers and size limit
+                headers = {'User-Agent': 'Image-Viewer/1.0'}
+                response = requests.get(
+                    url, stream=True, timeout=10, headers=headers
+                )
                 response.raise_for_status()  # Raise an exception for HTTP errors
 
+                # Check content type
+                content_type = response.headers.get('content-type', '').lower()
+                if not content_type.startswith('image/'):
+                    image_label.setText("URL does not point to an image.")
+                    return
+
+                # Limit download size to prevent memory issues (5MB limit)
+                max_size = 5 * 1024 * 1024  # 5MB
+                content_length = response.headers.get('content-length')
+                if content_length and int(content_length) > max_size:
+                    image_label.setText("Image too large. Maximum size: 5MB")
+                    return
+
                 image_data = response.content
+                if len(image_data) > max_size:
+                    image_label.setText("Image too large. Maximum size: 5MB")
+                    return
+
                 pixmap = QPixmap()
                 if not pixmap.loadFromData(image_data):
-                    image_label.setText("Failed to load image. Unsupported format or corrupt data.")
+                    image_label.setText(
+                        "Failed to load image. Unsupported format or corrupt data."
+                    )
                     return
 
                 # Keep aspect ratio, scale to fit label
-                image_label.setPixmap(pixmap.scaled(image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                image_label.setPixmap(
+                    pixmap.scaled(
+                        image_label.size(),
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                )
 
+            except requests.exceptions.Timeout:
+                image_label.setText("Request timed out. Please try again.")
             except requests.exceptions.RequestException as e:
                 image_label.setText(f"Network Error: {e}")
-            except Exception as e: # Catch any other unexpected errors
+            except Exception as e:  # Catch any other unexpected errors
                 image_label.setText(f"An unexpected error occurred: {e}")
-        # --- End of logic ---
 
         load_button.clicked.connect(load_image_from_url)
 
