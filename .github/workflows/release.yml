@@ -5,8 +5,12 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-    runs-on: windows-latest
+  analyze:
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.validate.outputs.match }}
+      build_number: ${{ steps.validate.outputs.build_number }}
+      message: ${{ steps.commit.outputs.message }}
 
     steps:
     - name: Checkout code
@@ -19,11 +23,10 @@ jobs:
         msg="$(git log -1 --pretty=%B)"
         echo "message=$msg" >> $GITHUB_OUTPUT
 
-    - name: Validate commit message and extract build number
+    - name: Validate commit message
       id: validate
       shell: bash
       run: |
-        echo "Commit message: '${{ steps.commit.outputs.message }}'"
         if [[ "${{ steps.commit.outputs.message }}" =~ ^Build[[:space:]]+([0-9]+)$ ]]; then
           echo "match=true" >> $GITHUB_OUTPUT
           echo "build_number=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
@@ -31,12 +34,14 @@ jobs:
           echo "match=false" >> $GITHUB_OUTPUT
         fi
 
-    - name: Stop if not a release commit
-      if: steps.validate.outputs.match != 'true'
-      run: |
-        echo "Not a 'Build <number>' commit — skipping release."
-        exit 0
-      shell: bash
+  release:
+    needs: analyze
+    if: needs.analyze.outputs.should_release == 'true'
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -54,7 +59,7 @@ jobs:
       run: pyinstaller --noconsole --onefile main.py
       shell: bash
 
-    - name: Generate release notes from commits
+    - name: Generate release notes
       id: notes
       shell: bash
       run: |
@@ -65,16 +70,19 @@ jobs:
         else
           git log --pretty=format:"- %h %s by @%an" > release_notes.md
         fi
-        echo "release_body<<EOF" >> $GITHUB_OUTPUT
-        echo "Changes in Build ${{ steps.validate.outputs.build_number }}:" >> $GITHUB_OUTPUT
-        cat release_notes.md >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+
+        {
+          echo "release_body<<EOF"
+          echo "Changes in Build ${{ needs.analyze.outputs.build_number }}:"
+          cat release_notes.md
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
 
     - name: Upload EXE to GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        name: Build ${{ steps.validate.outputs.build_number }}
-        tag_name: build-${{ steps.validate.outputs.build_number }}
+        name: Build ${{ needs.analyze.outputs.build_number }}
+        tag_name: build-${{ needs.analyze.outputs.build_number }}
         body: ${{ steps.notes.outputs.release_body }}
         files: dist/main.exe
       env:
