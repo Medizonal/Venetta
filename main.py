@@ -1,4 +1,4 @@
-# This is the full, updated content for main.py
+# This is the full, updated content for main.py with the fix.
 
 import sys
 from random import choice
@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QMenuBar,
     QMenu,
     QAction,
-    QInputDialog,  ## NEW: Import for user input dialogs
+    QInputDialog,
 )
 from PySide6.QtCore import Qt
 
@@ -41,10 +41,10 @@ class MainWindow(QMainWindow):
         }
         self.create_menu(dynamic_menus)
 
-        ## NEW: Add a whole new menu for our feature and bug
         calculator_menu = {
             "Calculator": {
-                "Add Numbers (Buggy)": self.perform_addition,
+                ## FIXED: Renamed the menu item now that the bug is gone.
+                "Add Numbers": self.perform_addition,
             }
         }
         self.create_menu(calculator_menu)
@@ -95,18 +95,25 @@ class MainWindow(QMainWindow):
         ]
         self.label.setText(choice(messages))
 
-    ## NEW (Feature with a Bug): This function adds two numbers.
     def perform_addition(self) -> None:
         """Get two numbers from the user and add them."""
         num1_str, ok1 = QInputDialog.getText(self, "Addition", "Enter the first number:")
         if ok1:
             num2_str, ok2 = QInputDialog.getText(self, "Addition", "Enter the second number:")
             if ok2:
-                # THE BUG IS HERE: It adds the text together ("5" + "5" = "55")
-                # instead of adding the numbers (5 + 5 = 10).
-                # This is because QInputDialog.getText returns a string.
-                result = num1_str + num2_str
-                self.label.setText(f"Result: {num1_str} + {num2_str} = {result}")
+                ## FIXED: The logic is now wrapped in a try-except block
+                ## to handle cases where the user enters non-numeric text.
+                try:
+                    # Convert the input strings to integers before adding
+                    num1 = int(num1_str)
+                    num2 = int(num2_str)
+                    
+                    # Now the '+' operator performs correct mathematical addition
+                    result = num1 + num2
+                    self.label.setText(f"Result: {num1} + {num2} = {result}")
+                except ValueError:
+                    # If conversion to int() fails, show an error.
+                    self.label.setText("Error: Please enter valid whole numbers.")
 
 
 def main() -> None:
