@@ -16,18 +16,24 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Get commit message
+    - name: Get commit message (safe multiline)
       id: commit
       shell: bash
       run: |
         msg="$(git log -1 --pretty=%B)"
-        echo "message=$msg" >> $GITHUB_OUTPUT
+        {
+          echo "message<<EOF"
+          echo "$msg"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT
 
     - name: Validate commit message
       id: validate
       shell: bash
       run: |
-        if [[ "${{ steps.commit.outputs.message }}" =~ ^Build[[:space:]]+([0-9]+)$ ]]; then
+        commit_msg="${{ steps.commit.outputs.message }}"
+        commit_msg_lower="${commit_msg,,}"
+        if [[ "$commit_msg_lower" =~ build[[:space:]]+([0-9]+) ]]; then
           echo "match=true" >> $GITHUB_OUTPUT
           echo "build_number=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
         else
