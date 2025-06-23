@@ -46,17 +46,14 @@ jobs:
     needs: analyze
     if: needs.analyze.outputs.should_release == 'true'
     runs-on: windows-latest
-
-    # Grant write permissions to this job so it can create a release
     permissions:
       contents: write
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      # Fetch all history and tags to generate changelog
-      with:
-        fetch-depth: 0
+      # No fetch-depth needed here because the release generator
+      # uses the GitHub API, not the local git history.
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -74,37 +71,15 @@ jobs:
       run: pyinstaller --noconsole --onefile main.py
       shell: bash
 
-    - name: Generate release notes
-      id: notes
-      shell: bash
-      run: |
-        git fetch --tags
-        latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-
-        if [ -n "$latest_tag" ]; then
-          changelog=$(git log "$latest_tag"..HEAD --pretty=format:"- %s (%h) by @%an")
-        else
-          changelog=$(git log --pretty=format:"- %s (%h) by @%an")
-        fi
-
-        release_body=$(cat <<EOM
-        Changes in Build ${{ needs.analyze.outputs.build_number }}:
-
-        ${changelog}
-        EOM
-        )
-
-        release_body="${release_body//'%'/'%25'}"
-        release_body="${release_body//$'\n'/'%0A'}"
-        release_body="${release_body//$'\r'/'%0D'}"
-        echo "release_body=$release_body" >> "$GITHUB_OUTPUT"
-
-    - name: Upload EXE to GitHub Release
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         name: Build ${{ needs.analyze.outputs.build_number }}
         tag_name: build-${{ needs.analyze.outputs.build_number }}
-        body: ${{ steps.notes.outputs.release_body }}
+        # This is the key change: tell the action to use GitHub's
+        # built-in note generator. It will automatically create a
+        # beautiful, categorized changelog for you.
+        generate_release_notes: true
         files: dist/main.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
