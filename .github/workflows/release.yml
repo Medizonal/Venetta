@@ -16,7 +16,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Get commit message (safe multiline)
+    - name: Get commit message (multiline safe)
       id: commit
       shell: bash
       run: |
@@ -25,7 +25,7 @@ jobs:
           echo "message<<EOF"
           echo "$msg"
           echo "EOF"
-        } >> $GITHUB_OUTPUT
+        } >> "$GITHUB_OUTPUT"
 
     - name: Validate commit message
       id: validate
@@ -34,10 +34,10 @@ jobs:
         commit_msg="${{ steps.commit.outputs.message }}"
         commit_msg_lower="${commit_msg,,}"
         if [[ "$commit_msg_lower" =~ build[[:space:]]+([0-9]+) ]]; then
-          echo "match=true" >> $GITHUB_OUTPUT
-          echo "build_number=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+          echo "match=true" >> "$GITHUB_OUTPUT"
+          echo "build_number=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
         else
-          echo "match=false" >> $GITHUB_OUTPUT
+          echo "match=false" >> "$GITHUB_OUTPUT"
         fi
 
   release:
@@ -71,18 +71,19 @@ jobs:
       run: |
         git fetch --tags
         latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
         if [ -n "$latest_tag" ]; then
-          git log "$latest_tag"..HEAD --pretty=format:"- %h %s by @%an" > release_notes.md
+          changelog=$(git log "$latest_tag"..HEAD --pretty=format:"- %h %s by @%an")
         else
-          git log --pretty=format:"- %h %s by @%an" > release_notes.md
+          changelog=$(git log --pretty=format:"- %h %s by @%an")
         fi
 
         {
           echo "release_body<<EOF"
           echo "Changes in Build ${{ needs.analyze.outputs.build_number }}:"
-          cat release_notes.md
+          echo "$changelog"
           echo "EOF"
-        } >> $GITHUB_OUTPUT
+        } >> "$GITHUB_OUTPUT"
 
     - name: Upload EXE to GitHub Release
       uses: softprops/action-gh-release@v2
