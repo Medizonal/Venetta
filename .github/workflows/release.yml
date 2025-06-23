@@ -15,6 +15,8 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Get commit message (multiline safe)
       id: commit
@@ -45,9 +47,16 @@ jobs:
     if: needs.analyze.outputs.should_release == 'true'
     runs-on: windows-latest
 
+    # Grant write permissions to this job so it can create a release
+    permissions:
+      contents: write
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+      # Fetch all history and tags to generate changelog
+      with:
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -73,17 +82,22 @@ jobs:
         latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
 
         if [ -n "$latest_tag" ]; then
-          changelog=$(git log "$latest_tag"..HEAD --pretty=format:"- %h %s by @%an")
+          changelog=$(git log "$latest_tag"..HEAD --pretty=format:"- %s (%h) by @%an")
         else
-          changelog=$(git log --pretty=format:"- %h %s by @%an")
+          changelog=$(git log --pretty=format:"- %s (%h) by @%an")
         fi
 
-        {
-          echo "release_body<<EOF"
-          echo "Changes in Build ${{ needs.analyze.outputs.build_number }}:"
-          echo "$changelog"
-          echo "EOF"
-        } >> "$GITHUB_OUTPUT"
+        release_body=$(cat <<EOM
+        Changes in Build ${{ needs.analyze.outputs.build_number }}:
+
+        ${changelog}
+        EOM
+        )
+
+        release_body="${release_body//'%'/'%25'}"
+        release_body="${release_body//$'\n'/'%0A'}"
+        release_body="${release_body//$'\r'/'%0D'}"
+        echo "release_body=$release_body" >> "$GITHUB_OUTPUT"
 
     - name: Upload EXE to GitHub Release
       uses: softprops/action-gh-release@v2
