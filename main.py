@@ -1,4 +1,5 @@
 import sys
+from random import choice
 from typing import Callable
 from PySide6.QtWidgets import (
     QApplication,
@@ -23,17 +24,17 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Simple PySide6 App")
 
-        label = QLabel("Hi", alignment=Qt.AlignCenter)
-        self.setCentralWidget(label)
+        self.label = QLabel("Hi", alignment=Qt.AlignCenter)
+        self.setCentralWidget(self.label)
 
         self.menu_bar: QMenuBar = self.menuBar()
 
-        self.add_quit_menu()  # Static quit menu first
+        self.add_quit_menu()
 
-        # Example: dynamic menu structure (optional for future use)
         dynamic_menus = {
-            # Add more menus like this in future
-            # "Tools": {"Do Something": self.some_function}
+            "Tools": {
+                "Surprise": self.show_surprise_message
+            }
         }
         self.create_menu(dynamic_menus)
 
@@ -69,6 +70,20 @@ class MainWindow(QMainWindow):
         Quit the application.
         """
         QApplication.quit()
+
+    def show_surprise_message(self) -> None:
+        """
+        Show a random surprise message in the central label.
+        """
+        messages = [
+            "Hello there!",
+            "You found me!",
+            "Surprise 🎉",
+            "PySide6 FTW!",
+            "Keep clicking..."
+        ]
+        self.label.setText(choice(messages))
+
 
 def main() -> None:
     """
