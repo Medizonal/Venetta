@@ -2,16 +2,24 @@
 import sys
 from random import choice
 from typing import Callable
+from PySide6 import QtWidgets # Import the module
 from PySide6.QtWidgets import (
     QApplication,
-    QLabel,
     QMainWindow,
     QMenuBar,
     QMenu,
-    QAction,
+    # QAction, # Removed from here
     QInputDialog,
+    QDialog,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QLabel,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+import requests # Added for image downloading
+import validators # type: ignore # Added for URL validation
 
 
 class MainWindow(QMainWindow):
@@ -26,7 +34,8 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Simple PySide6 App")
 
-        self.label = QLabel("Hi", alignment=Qt.AlignCenter)
+        self.label = QLabel("Hi")
+        self.label.setAlignment(Qt.AlignCenter) # type: ignore # Changed to two lines
         self.setCentralWidget(self.label)
 
         self.menu_bar: QMenuBar = self.menuBar()
@@ -35,7 +44,8 @@ class MainWindow(QMainWindow):
 
         dynamic_menus = {
             "Tools": {
-                "Surprise": self.show_surprise_message
+                "Surprise": self.show_surprise_message,
+                "Image URL Shower": self.show_image_url_view, # Added new menu item
             }
         }
         self.create_menu(dynamic_menus)
@@ -54,7 +64,7 @@ class MainWindow(QMainWindow):
         """
         window_menu: QMenu = self.menu_bar.addMenu("Window")
 
-        quit_action: QAction = QAction("Quit", self)
+        quit_action: QtWidgets.QAction = QtWidgets.QAction("Quit", self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.quit_app)
 
@@ -71,7 +81,7 @@ class MainWindow(QMainWindow):
         for menu_name, actions in menus.items():
             menu: QMenu = self.menu_bar.addMenu(menu_name)
             for action_name, callback in actions.items():
-                action: QAction = QAction(action_name, self)
+                action: QtWidgets.QAction = QtWidgets.QAction(action_name, self)
                 action.triggered.connect(callback)
                 menu.addAction(action)
 
@@ -113,6 +123,96 @@ class MainWindow(QMainWindow):
                 except ValueError:
                     # If conversion to int() fails, show an error.
                     self.label.setText("Error: Please enter valid whole numbers.")
+
+    def show_image_url_view(self) -> None:
+        """
+        Shows a dialog to enter an image URL and display the image.
+        """
+        # Placeholder for the dialog implementation
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Image URL Shower")
+        layout = QVBoxLayout()
+
+        url_input = QLineEdit()
+        url_input.setPlaceholderText("Enter Image URL")
+        layout.addWidget(url_input)
+
+        load_button = QPushButton("Load Image")
+        layout.addWidget(load_button)
+
+        image_label = QLabel("Image will be shown here")
+        image_label.setAlignment(Qt.AlignCenter) # type: ignore
+        layout.addWidget(image_label)
+
+        # --- Logic for loading image ---
+        def load_image_from_url():
+            url = url_input.text()
+            if not validators.url(url):
+                image_label.setText("Invalid URL format.")
+                return
+
+            # Basic security check for image URLs
+            if not any(
+                url.lower().endswith(ext)
+                for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
+            ):
+                image_label.setText("URL must point to an image file (.jpg, .png, .gif, etc.)")
+                return
+
+            try:
+                # Security headers and size limit
+                headers = {'User-Agent': 'Image-Viewer/1.0'}
+                response = requests.get(
+                    url, stream=True, timeout=10, headers=headers
+                )
+                response.raise_for_status()  # Raise an exception for HTTP errors
+
+                # Check content type
+                content_type = response.headers.get('content-type', '').lower()
+                if not content_type.startswith('image/'):
+                    image_label.setText("URL does not point to an image.")
+                    return
+
+                # Limit download size to prevent memory issues (5MB limit)
+                max_size = 5 * 1024 * 1024  # 5MB
+                content_length = response.headers.get('content-length')
+                if content_length and int(content_length) > max_size:
+                    image_label.setText("Image too large. Maximum size: 5MB")
+                    return
+
+                image_data = response.content
+                if len(image_data) > max_size:
+                    image_label.setText("Image too large. Maximum size: 5MB")
+                    return
+
+                pixmap = QPixmap()
+                if not pixmap.loadFromData(image_data):
+                    image_label.setText(
+                        "Failed to load image. Unsupported format or corrupt data."
+                    )
+                    return
+
+                # Keep aspect ratio, scale to fit label
+                image_label.setPixmap(
+                    pixmap.scaled(
+                        image_label.size(),
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                )
+
+            except requests.exceptions.Timeout:
+                image_label.setText("Request timed out. Please try again.")
+            except requests.exceptions.RequestException as e:
+                image_label.setText(f"Network Error: {e}")
+            except Exception as e:  # Catch any other unexpected errors
+                image_label.setText(f"An unexpected error occurred: {e}")
+
+        load_button.clicked.connect(load_image_from_url)
+
+        dialog.setLayout(layout)
+        dialog.resize(400, 300) # Initial size, image might be larger or smaller
+        dialog.exec()
 
 
 def main() -> None:
