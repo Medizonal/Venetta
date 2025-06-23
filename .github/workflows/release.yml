@@ -1,3 +1,6 @@
+# This is the full, simplified content for your WORKFLOW file.
+# It validates the commit, builds the EXE, and creates a release with no body.
+
 name: Build and Release EXE
 
 on:
@@ -15,8 +18,6 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - name: Get commit message (multiline safe)
       id: commit
@@ -47,13 +48,11 @@ jobs:
     if: needs.analyze.outputs.should_release == 'true'
     runs-on: windows-latest
     permissions:
-      contents: write
+      contents: write # Needed to create a release
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      # No fetch-depth needed here because the release generator
-      # uses the GitHub API, not the local git history.
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -71,15 +70,15 @@ jobs:
       run: pyinstaller --noconsole --onefile main.py
       shell: bash
 
+    # The "Generate release notes" step is completely gone.
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         name: Build ${{ needs.analyze.outputs.build_number }}
         tag_name: build-${{ needs.analyze.outputs.build_number }}
-        # This is the key change: tell the action to use GitHub's
-        # built-in note generator. It will automatically create a
-        # beautiful, categorized changelog for you.
-        generate_release_notes: true
+        # The 'body' and 'generate_release_notes' keys are removed.
+        # This will create a release with an empty description.
         files: dist/main.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
