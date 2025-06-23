@@ -1,58 +1,32 @@
-# This is the full, simplified content for your WORKFLOW file.
-# It validates the commit, builds the EXE, and creates a release with no body.
+# This is the full, updated content for WORKFLOW file.
+# It uses a manual trigger and a smart script to generate date-based version names.
 
-name: Build and Release EXE
+name: Manual Build and Release
 
 on:
-  push:
-    branches: [ main ]
+  # This makes the workflow manually triggerable from the Actions tab
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'The branch to build the release from'
+        required: true
+        default: 'main'
 
 jobs:
-  analyze:
-    runs-on: ubuntu-latest
-    outputs:
-      should_release: ${{ steps.validate.outputs.match }}
-      build_number: ${{ steps.validate.outputs.build_number }}
-      message: ${{ steps.commit.outputs.message }}
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Get commit message (multiline safe)
-      id: commit
-      shell: bash
-      run: |
-        msg="$(git log -1 --pretty=%B)"
-        {
-          echo "message<<EOF"
-          echo "$msg"
-          echo "EOF"
-        } >> "$GITHUB_OUTPUT"
-
-    - name: Validate commit message
-      id: validate
-      shell: bash
-      run: |
-        commit_msg="${{ steps.commit.outputs.message }}"
-        commit_msg_lower="${commit_msg,,}"
-        if [[ "$commit_msg_lower" =~ build[[:space:]]+([0-9]+) ]]; then
-          echo "match=true" >> "$GITHUB_OUTPUT"
-          echo "build_number=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
-        else
-          echo "match=false" >> "$GITHUB_OUTPUT"
-        fi
-
+  # The 'analyze' job is no longer needed and has been removed.
   release:
-    needs: analyze
-    if: needs.analyze.outputs.should_release == 'true'
     runs-on: windows-latest
     permissions:
-      contents: write # Needed to create a release
+      contents: write # Needed to create a release and check for tags
 
     steps:
-    - name: Checkout code
+    - name: Checkout code from specified branch
       uses: actions/checkout@v4
+      with:
+        # This checks out the code from the branch you select when running the workflow
+        ref: ${{ github.event.inputs.branch }}
+        # fetch-depth: 0 is needed to get all the tags for comparison
+        fetch-depth: 0
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -70,15 +44,52 @@ jobs:
       run: pyinstaller --noconsole --onefile main.py
       shell: bash
 
-    # The "Generate release notes" step is completely gone.
+    - name: Generate Unique Release Name
+      id: version
+      shell: bash
+      run: |
+        # 1. Get the base date string in DD.MM.YY format
+        base_date=$(date +'%d.%m.%y')
+        
+        # 2. Start with a counter to handle multiple releases on the same day
+        counter=1
+        
+        # 3. Loop until we find a unique name
+        while true; do
+          if [ "$counter" -eq 1 ]; then
+            # First attempt for the day
+            prospective_name="Version $base_date"
+            prospective_tag="Version-$base_date" # Tags can't have spaces
+          else
+            # Subsequent attempts for the same day
+            prospective_name="Version $base_date V$counter"
+            prospective_tag="Version-$base_date-V$counter"
+          fi
+          
+          # 4. Check if this tag already exists in the remote repository
+          # The 'git tag -l' command lists local tags matching the pattern.
+          # If the output is empty, the tag is unique and we can exit the loop.
+          if [ -z "$(git tag -l "$prospective_tag")" ]; then
+            echo "Found unique tag: '$prospective_tag'"
+            break
+          else
+            echo "Tag '$prospective_tag' already exists. Trying next version..."
+            ((counter++))
+          fi
+        done
+        
+        # 5. Set the final unique names as outputs for the next step
+        {
+          echo "release_name=$prospective_name"
+          echo "tag_name=$prospective_tag"
+        } >> "$GITHUB_OUTPUT"
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        name: Build ${{ needs.analyze.outputs.build_number }}
-        tag_name: build-${{ needs.analyze.outputs.build_number }}
-        # The 'body' and 'generate_release_notes' keys are removed.
-        # This will create a release with an empty description.
+        # Use the outputs from the previous "Generate" step
+        name: ${{ steps.version.outputs.release_name }}
+        tag_name: ${{ steps.version.outputs.tag_name }}
         files: dist/main.exe
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
