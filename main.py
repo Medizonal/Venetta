@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenuBar,
     QMenu,
-    QAction, # type: ignore
     QInputDialog,
     QDialog,
     QLineEdit,
@@ -17,7 +16,8 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+# CORRECTED: QAction and QPixmap are both in QtGui
+from PySide6.QtGui import QPixmap, QAction
 import requests # Added for image downloading
 import validators # type: ignore # Added for URL validation
 
@@ -64,7 +64,8 @@ class MainWindow(QMainWindow):
         """
         window_menu: QMenu = self.menu_bar.addMenu("Window")
 
-        quit_action: QtWidgets.QAction = QtWidgets.QAction("Quit", self)
+        # CORRECTED: Now uses the directly imported QAction class
+        quit_action: QAction = QAction("Quit", self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.quit_app)
 
@@ -81,7 +82,8 @@ class MainWindow(QMainWindow):
         for menu_name, actions in menus.items():
             menu: QMenu = self.menu_bar.addMenu(menu_name)
             for action_name, callback in actions.items():
-                action: QtWidgets.QAction = QtWidgets.QAction(action_name, self)
+                # CORRECTED: Now uses the directly imported QAction class
+                action: QAction = QAction(action_name, self)
                 action.triggered.connect(callback)
                 menu.addAction(action)
 
