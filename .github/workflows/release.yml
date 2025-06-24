@@ -44,6 +44,16 @@ jobs:
       run: pyinstaller --noconsole --onefile main.py
       shell: bash
 
+    # --- UPDATED STEP ---
+    # This step now runs the built executable with the --test argument.
+    # This assumes your app will perform a test and exit automatically.
+    - name: Run Executable in Test Mode
+      run: |
+        echo "--- Running main.exe with --test argument ---"
+        ./dist/main.exe --test
+        echo "--- Execution Finished ---"
+      shell: bash
+
     - name: Generate Unique Release Name
       id: version
       shell: bash
