@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenuBar,
     QMenu,
-    # QAction, # Removed from here
+    QAction, # type: ignore
     QInputDialog,
     QDialog,
     QLineEdit,
