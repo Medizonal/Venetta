@@ -1,10 +1,6 @@
-# This is the full, updated content for WORKFLOW file.
-# It uses a manual trigger and a smart script to generate date-based version names.
-
 name: Manual Build and Release
 
 on:
-  # This makes the workflow manually triggerable from the Actions tab
   workflow_dispatch:
     inputs:
       branch:
@@ -13,19 +9,19 @@ on:
         default: 'main'
 
 jobs:
-  # The 'analyze' job is no longer needed and has been removed.
-  release:
+  build:
     runs-on: windows-latest
+    outputs:
+      release_name: ${{ steps.version.outputs.release_name }}
+      tag_name: ${{ steps.version.outputs.tag_name }}
     permissions:
-      contents: write # Needed to create a release and check for tags
+      contents: write
 
     steps:
-    - name: Checkout code from specified branch
+    - name: Checkout code
       uses: actions/checkout@v4
       with:
-        # This checks out the code from the branch you select when running the workflow
         ref: ${{ github.event.inputs.branch }}
-        # fetch-depth: 0 is needed to get all the tags for comparison
         fetch-depth: 0
 
     - name: Set up Python
@@ -44,62 +40,101 @@ jobs:
       run: pyinstaller --noconsole --onefile main.py
       shell: bash
 
-    # --- UPDATED STEP ---
-    # This step now runs the built executable with the --test argument.
-    # This assumes your app will perform a test and exit automatically.
-    - name: Run Executable in Test Mode
-      run: |
-        echo "--- Running main.exe with --test argument ---"
-        ./dist/main.exe --test
-        echo "--- Execution Finished ---"
-      shell: bash
-
     - name: Generate Unique Release Name
       id: version
       shell: bash
       run: |
-        # 1. Get the base date string in DD.MM.YY format
         base_date=$(date +'%d.%m.%y')
-        
-        # 2. Start with a counter to handle multiple releases on the same day
         counter=1
-        
-        # 3. Loop until we find a unique name
         while true; do
           if [ "$counter" -eq 1 ]; then
-            # First attempt for the day
-            prospective_name="Version $base_date"
-            prospective_tag="Version-$base_date" # Tags can't have spaces
+            name="Version $base_date"
+            tag="Version-$base_date"
           else
-            # Subsequent attempts for the same day
-            prospective_name="Version $base_date V$counter"
-            prospective_tag="Version-$base_date-V$counter"
+            name="Version $base_date V$counter"
+            tag="Version-$base_date-V$counter"
           fi
-          
-          # 4. Check if this tag already exists in the remote repository
-          # The 'git tag -l' command lists local tags matching the pattern.
-          # If the output is empty, the tag is unique and we can exit the loop.
-          if [ -z "$(git tag -l "$prospective_tag")" ]; then
-            echo "Found unique tag: '$prospective_tag'"
+          if [ -z "$(git tag -l "$tag")" ]; then
             break
           else
-            echo "Tag '$prospective_tag' already exists. Trying next version..."
             ((counter++))
           fi
         done
-        
-        # 5. Set the final unique names as outputs for the next step
-        {
-          echo "release_name=$prospective_name"
-          echo "tag_name=$prospective_tag"
-        } >> "$GITHUB_OUTPUT"
+        echo "release_name=$name" >> "$GITHUB_OUTPUT"
+        echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
+
+    - name: Upload built app
+      uses: actions/upload-artifact@v4
+      with:
+        name: main-exe
+        path: dist/main.exe
+
+  test-gui:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.branch }}
+
+    - name: Download built app
+      uses: actions/download-artifact@v4
+      with:
+        name: main-exe
+        path: ./dist
+
+    - name: Make executable
+      run: chmod +x ./dist/main.exe
+
+    - name: Install Xvfb and screenshot tools
+      run: |
+        sudo apt update
+        sudo apt install -y xvfb scrot
+
+    - name: Start virtual display and run GUI test
+      run: |
+        Xvfb :99 -screen 0 1920x1080x24 &
+        export DISPLAY=:99
+        ./dist/main.exe --test &
+        sleep 3  # wait for GUI to appear
+        scrot screenshot.png
+
+    - name: Upload Screenshot
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-screenshot
+        path: screenshot.png
+
+  release:
+    runs-on: windows-latest
+    needs: [build, test-gui]
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download executable
+      uses: actions/download-artifact@v4
+      with:
+        name: main-exe
+        path: dist
+
+    - name: Download Screenshot
+      uses: actions/download-artifact@v4
+      with:
+        name: test-screenshot
+        path: screenshot
 
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        # Use the outputs from the previous "Generate" step
-        name: ${{ steps.version.outputs.release_name }}
-        tag_name: ${{ steps.version.outputs.tag_name }}
-        files: dist/main.exe
+        name: ${{ needs.build.outputs.release_name }}
+        tag_name: ${{ needs.build.outputs.tag_name }}
+        files: |
+          dist/main.exe
+          screenshot/screenshot.png
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
