@@ -1,8 +1,9 @@
-# Build 2
 import sys
 from random import choice
 from typing import Callable
-from PySide6 import QtWidgets # Import the module
+import platform
+import ctypes
+from PySide6 import QtWidgets
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -16,10 +17,9 @@ from PySide6.QtWidgets import (
     QLabel,
 )
 from PySide6.QtCore import Qt
-# CORRECTED: QAction and QPixmap are both in QtGui
 from PySide6.QtGui import QPixmap, QAction
-import requests # Added for image downloading
-import validators # type: ignore # Added for URL validation
+import requests
+import validators # type: ignore
 
 
 class MainWindow(QMainWindow):
@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Simple PySide6 App")
 
         self.label = QLabel("Hi")
-        self.label.setAlignment(Qt.AlignCenter) # type: ignore # Changed to two lines
+        self.label.setAlignment(Qt.AlignCenter)
         self.setCentralWidget(self.label)
 
         self.menu_bar: QMenuBar = self.menuBar()
@@ -45,14 +45,13 @@ class MainWindow(QMainWindow):
         dynamic_menus = {
             "Tools": {
                 "Surprise": self.show_surprise_message,
-                "Image URL Shower": self.show_image_url_view, # Added new menu item
+                "Image URL Shower": self.show_image_url_view,
             }
         }
         self.create_menu(dynamic_menus)
 
         calculator_menu = {
             "Calculator": {
-                ## FIXED: Renamed the menu item now that the bug is gone.
                 "Add Numbers": self.perform_addition,
             }
         }
@@ -64,7 +63,6 @@ class MainWindow(QMainWindow):
         """
         window_menu: QMenu = self.menu_bar.addMenu("Window")
 
-        # CORRECTED: Now uses the directly imported QAction class
         quit_action: QAction = QAction("Quit", self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.quit_app)
@@ -82,7 +80,6 @@ class MainWindow(QMainWindow):
         for menu_name, actions in menus.items():
             menu: QMenu = self.menu_bar.addMenu(menu_name)
             for action_name, callback in actions.items():
-                # CORRECTED: Now uses the directly imported QAction class
                 action: QAction = QAction(action_name, self)
                 action.triggered.connect(callback)
                 menu.addAction(action)
@@ -112,25 +109,18 @@ class MainWindow(QMainWindow):
         if ok1:
             num2_str, ok2 = QInputDialog.getText(self, "Addition", "Enter the second number:")
             if ok2:
-                ## FIXED: The logic is now wrapped in a try-except block
-                ## to handle cases where the user enters non-numeric text.
                 try:
-                    # Convert the input strings to integers before adding
                     num1 = int(num1_str)
                     num2 = int(num2_str)
-                    
-                    # Now the '+' operator performs correct mathematical addition
                     result = num1 + num2
                     self.label.setText(f"Result: {num1} + {num2} = {result}")
                 except ValueError:
-                    # If conversion to int() fails, show an error.
                     self.label.setText("Error: Please enter valid whole numbers.")
 
     def show_image_url_view(self) -> None:
         """
         Shows a dialog to enter an image URL and display the image.
         """
-        # Placeholder for the dialog implementation
         dialog = QDialog(self)
         dialog.setWindowTitle("Image URL Shower")
         layout = QVBoxLayout()
@@ -143,17 +133,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(load_button)
 
         image_label = QLabel("Image will be shown here")
-        image_label.setAlignment(Qt.AlignCenter) # type: ignore
+        image_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(image_label)
 
-        # --- Logic for loading image ---
         def load_image_from_url():
             url = url_input.text()
             if not validators.url(url):
                 image_label.setText("Invalid URL format.")
                 return
 
-            # Basic security check for image URLs
             if not any(
                 url.lower().endswith(ext)
                 for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']
@@ -162,21 +150,18 @@ class MainWindow(QMainWindow):
                 return
 
             try:
-                # Security headers and size limit
                 headers = {'User-Agent': 'Image-Viewer/1.0'}
                 response = requests.get(
                     url, stream=True, timeout=10, headers=headers
                 )
-                response.raise_for_status()  # Raise an exception for HTTP errors
+                response.raise_for_status()
 
-                # Check content type
                 content_type = response.headers.get('content-type', '').lower()
                 if not content_type.startswith('image/'):
                     image_label.setText("URL does not point to an image.")
                     return
 
-                # Limit download size to prevent memory issues (5MB limit)
-                max_size = 5 * 1024 * 1024  # 5MB
+                max_size = 5 * 1024 * 1024
                 content_length = response.headers.get('content-length')
                 if content_length and int(content_length) > max_size:
                     image_label.setText("Image too large. Maximum size: 5MB")
@@ -194,7 +179,6 @@ class MainWindow(QMainWindow):
                     )
                     return
 
-                # Keep aspect ratio, scale to fit label
                 image_label.setPixmap(
                     pixmap.scaled(
                         image_label.size(),
@@ -207,13 +191,13 @@ class MainWindow(QMainWindow):
                 image_label.setText("Request timed out. Please try again.")
             except requests.exceptions.RequestException as e:
                 image_label.setText(f"Network Error: {e}")
-            except Exception as e:  # Catch any other unexpected errors
+            except Exception as e:
                 image_label.setText(f"An unexpected error occurred: {e}")
 
         load_button.clicked.connect(load_image_from_url)
 
         dialog.setLayout(layout)
-        dialog.resize(400, 300) # Initial size, image might be larger or smaller
+        dialog.resize(400, 300)
         dialog.exec()
 
 
@@ -221,34 +205,29 @@ def main() -> None:
     """
     Run the application, with a special mode for automated testing.
     """
-    # This checks if '--test' was passed as an argument when running the script.
     is_test_mode = '--test' in sys.argv
 
-    # We always need a QApplication instance.
+    if is_test_mode and platform.system() == "Windows":
+        if ctypes.windll.kernel32.AttachConsole(-1):
+            print("Successfully attached to console for test mode.")
+
     app = QApplication(sys.argv)
 
     if is_test_mode:
         print("--- Running in --test mode ---")
         try:
-            # In test mode, we just create the main window to ensure it
-            # initializes without errors.
             print("Initializing MainWindow...")
-            _ = MainWindow()  # The window is created but not shown.
+            _ = MainWindow()
             print("MainWindow initialized successfully.")
             print("--- Test finished successfully ---")
-            # Exit with a success code (0) without starting the app loop.
             sys.exit(0)
         except Exception as e:
-            # If any error occurs during initialization, print it and exit
-            # with a failure code (1). This will fail the GitHub Action.
             print(f"!!! ERROR during initialization: {e}")
             sys.exit(1)
     else:
-        # This is the normal execution path for a user.
         window = MainWindow()
         window.resize(300, 200)
         window.show()
-        # This starts the event loop and waits for the user to close the app.
         sys.exit(app.exec())
 
 
