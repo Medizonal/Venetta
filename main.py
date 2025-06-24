@@ -217,13 +217,37 @@ class MainWindow(QMainWindow):
 
 def main() -> None:
     """
-    Run the application.
+    Run the application, with a special mode for automated testing.
     """
+    # This checks if '--test' was passed as an argument when running the script.
+    is_test_mode = '--test' in sys.argv
+
+    # We always need a QApplication instance.
     app = QApplication(sys.argv)
-    window = MainWindow()
-    window.resize(300, 200)
-    window.show()
-    sys.exit(app.exec())
+
+    if is_test_mode:
+        print("--- Running in --test mode ---")
+        try:
+            # In test mode, we just create the main window to ensure it
+            # initializes without errors.
+            print("Initializing MainWindow...")
+            _ = MainWindow()  # The window is created but not shown.
+            print("MainWindow initialized successfully.")
+            print("--- Test finished successfully ---")
+            # Exit with a success code (0) without starting the app loop.
+            sys.exit(0)
+        except Exception as e:
+            # If any error occurs during initialization, print it and exit
+            # with a failure code (1). This will fail the GitHub Action.
+            print(f"!!! ERROR during initialization: {e}")
+            sys.exit(1)
+    else:
+        # This is the normal execution path for a user.
+        window = MainWindow()
+        window.resize(300, 200)
+        window.show()
+        # This starts the event loop and waits for the user to close the app.
+        sys.exit(app.exec())
 
 
 if __name__ == "__main__":
